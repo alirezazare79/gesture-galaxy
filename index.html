@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>GESTURE GALAXY — Explorez l'univers avec vos mains</title>
+    <meta
+      name="description"
+      content="Une galaxie 3D de milliers d'étoiles que vous contrôlez avec les mouvements de votre main, détectés en temps réel par votre webcam. Tout fonctionne dans le navigateur."
+    />
+    <meta name="theme-color" content="#05030f" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+
+    <!-- Aperçu pour LinkedIn / réseaux sociaux (URL complétée automatiquement au déploiement) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="GESTURE GALAXY — Explorez l'univers avec vos mains" />
+    <meta
+      property="og:description"
+      content="Contrôlez une galaxie 3D de milliers d'étoiles avec les gestes de votre main, directement dans votre navigateur."
+    />
+    <meta property="og:image" content="%VITE_SITE_URL%og-image.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+  <body>
+    <div id="app" class="app" data-state="welcome" data-mode="none">
+      <!-- Scène 3D -->
+      <div id="scene" class="scene" aria-hidden="false"></div>
+      <div class="vignette" aria-hidden="true"></div>
+      <div id="reticle" class="reticle" aria-hidden="true"><span></span></div>
+
+      <!-- Barre supérieure -->
+      <header class="topbar hud">
+        <div class="brand">
+          <p class="brand__title">GESTURE <span>GALAXY</span></p>
+          <p class="brand__subtitle">Explorez l'univers avec vos mains</p>
+        </div>
+        <nav class="toolbar" aria-label="Commandes de l'expérience">
+          <button id="btn-camera" class="btn btn--primary" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 10l4.55-2.28A1 1 0 0121 8.62v6.76a1 1 0 01-1.45.9L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+            <span class="btn__label">Activer la caméra</span>
+          </button>
+          <button id="btn-effects" class="btn" type="button" aria-pressed="true" title="Activer ou désactiver les effets visuels (touche E)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3zM19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z" /></svg>
+            <span class="btn__label">Effets : activés</span>
+          </button>
+          <button id="btn-reset" class="btn" type="button" title="Réinitialiser la galaxie (touche R)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v6h6M20 20v-6h-6M5.6 15A8 8 0 0018.4 17M18.4 9A8 8 0 005.6 7" /></svg>
+            <span class="btn__label">Réinitialiser la galaxie</span>
+          </button>
+          <button id="btn-fullscreen" class="btn" type="button" title="Plein écran (touche F)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
+            <span class="btn__label">Plein écran</span>
+          </button>
+        </nav>
+      </header>
+
+      <!-- Guide des gestes -->
+      <aside class="guide hud" aria-label="Guide des gestes">
+        <button class="guide__toggle" id="guide-toggle" type="button" aria-expanded="true" aria-controls="guide-list">
+          Gestes
+        </button>
+        <ul class="guide__list" id="guide-list">
+          <li data-gesture="open"><span class="guide__icon">✋</span><span><strong>Main ouverte</strong><em>Expansion</em></span></li>
+          <li data-gesture="fist"><span class="guide__icon">✊</span><span><strong>Poing fermé</strong><em>Contraction</em></span></li>
+          <li data-gesture="horizontal"><span class="guide__icon">↔</span><span><strong>Gauche / droite</strong><em>Rotation</em></span></li>
+          <li data-gesture="vertical"><span class="guide__icon">↕</span><span><strong>Haut / bas</strong><em>Angle de vue</em></span></li>
+          <li data-gesture="pinch"><span class="guide__icon">🤏</span><span><strong>Pincement</strong><em>Impulsion</em></span></li>
+        </ul>
+      </aside>
+
+      <!-- Webcam + indicateurs -->
+      <section class="status-panel hud" aria-label="État de la détection">
+        <div class="cam-card" id="cam-card">
+          <video id="webcam" class="cam-card__video" muted playsinline autoplay></video>
+          <canvas id="landmarks" class="cam-card__overlay"></canvas>
+          <div class="cam-card__placeholder">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 10l4.55-2.28A1 1 0 0121 8.62v6.76a1 1 0 01-1.45.9L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+            <span>Caméra inactive</span>
+          </div>
+          <span class="cam-card__badge">Local · Privé</span>
+        </div>
+        <div class="status">
+          <div class="status__row" aria-live="polite">
+            <span class="dot" id="hand-dot" data-status="off"></span>
+            <span id="hand-status">Caméra inactive</span>
+          </div>
+          <div class="gesture-chip" id="gesture-chip" data-gesture="none" aria-live="polite">
+            <span class="gesture-chip__icon" id="gesture-icon">✦</span>
+            <span class="gesture-chip__text">
+              <span class="gesture-chip__label" id="gesture-label">En attente</span>
+              <span class="gesture-chip__hint" id="gesture-hint">Aucun geste</span>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Commandes du mode souris -->
+      <div class="mouse-bar hud" id="mouse-bar" aria-label="Commandes du mode souris">
+        <p class="mouse-bar__hint">
+          Glissez pour tourner et incliner · Molette pour l'expansion · Clic pour une impulsion
+        </p>
+        <div class="mouse-bar__buttons">
+          <button class="btn btn--small" id="btn-contract" type="button" aria-pressed="false">✊ Contraction</button>
+          <button class="btn btn--small btn--accent" id="btn-pulse" type="button">🤏 Impulsion</button>
+          <button class="btn btn--small" id="btn-expand" type="button" aria-pressed="false">✋ Expansion</button>
+        </div>
+      </div>
+
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+      <!-- Écran d'accueil / chargement / erreurs -->
+      <section id="welcome" class="overlay" aria-labelledby="welcome-title">
+        <div class="panel welcome" id="welcome-panel">
+          <p class="eyebrow">Expérience interactive · Vision par ordinateur</p>
+          <h1 class="welcome__title" id="welcome-title">GESTURE <span>GALAXY</span></h1>
+          <p class="welcome__subtitle">Explorez l'univers avec vos mains</p>
+          <p class="welcome__pitch">Et si vous pouviez contrôler l'univers du bout des doigts&nbsp;?</p>
+          <button id="btn-start" class="btn-hero" type="button">
+            <span>Commencer l'expérience</span>
+          </button>
+          <button id="btn-mouse" class="link-btn" type="button">Continuer sans caméra (mode souris)</button>
+          <ul class="welcome__gestures" aria-label="Aperçu des gestes">
+            <li><span>✋</span>Expansion</li>
+            <li><span>✊</span>Contraction</li>
+            <li><span>↔</span>Rotation</li>
+            <li><span>↕</span>Angle</li>
+            <li><span>🤏</span>Impulsion</li>
+          </ul>
+          <p class="privacy-note">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11V8a6 6 0 1112 0v3M5 11h14v10H5z" /></svg>
+            La vidéo est analysée localement dans votre navigateur. Aucune image n'est envoyée.
+          </p>
+        </div>
+
+        <div class="panel loader" id="loader" hidden>
+          <div class="loader__orbit" aria-hidden="true"><span></span><span></span><span></span></div>
+          <h2 class="loader__title">Préparation de votre univers…</h2>
+          <ol class="steps" id="steps">
+            <li data-step="camera">Autorisation de la webcam</li>
+            <li data-step="runtime">Initialisation de MediaPipe</li>
+            <li data-step="model">Chargement du modèle de reconnaissance des mains</li>
+            <li data-step="scene">Initialisation de la scène 3D</li>
+            <li data-step="galaxy">Affichage de la galaxie</li>
+            <li data-step="gestures">Activation des interactions gestuelles</li>
+          </ol>
+        </div>
+
+        <div class="panel error-panel" id="error-panel" role="alert" hidden>
+          <div class="error-panel__icon" aria-hidden="true">!</div>
+          <h2 id="error-title">Caméra indisponible</h2>
+          <p id="error-message"></p>
+          <p class="error-panel__help" id="error-help"></p>
+          <div class="error-panel__actions">
+            <button id="btn-retry" class="btn btn--primary" type="button">Réessayer</button>
+            <button id="btn-error-mouse" class="btn" type="button">Continuer avec la souris</button>
+          </div>
+        </div>
+      </section>
+
+      <noscript>
+        <div class="noscript">GESTURE GALAXY nécessite JavaScript pour fonctionner.</div>
+      </noscript>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

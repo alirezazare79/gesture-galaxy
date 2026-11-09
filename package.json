@@ -1,0 +1,39 @@
+{
+  "name": "gesture-galaxy",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Une galaxie 3D de particules contrôlée par les gestes de la main, en temps réel dans le navigateur.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run typecheck && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "test": "node --test tests/*.test.ts",
+    "test:e2e": "node scripts/smoke-test.mjs",
+    "fetch-model": "node scripts/fetch-model.mjs",
+    "predev": "node scripts/fetch-model.mjs",
+    "prebuild": "node scripts/fetch-model.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/space-grotesk": "5.3.0",
+    "@fontsource/orbitron": "5.3.0",
+    "@mediapipe/tasks-vision": "1.1.1",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/three": "0.186.0",
+    "typescript": "6.0.3",
+    "vite": "8.3.5"
+  },
+  "homepage": "https://alirezazare79.github.io/gesture-galaxy/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alirezazare79/gesture-galaxy.git"
+  }
+}

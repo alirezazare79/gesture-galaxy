@@ -1,0 +1,74 @@
+# Construit le projet et le publie sur GitHub Pages à chaque push sur la branche principale.
+name: Déploiement GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # permet aussi un lancement manuel depuis l'onglet « Actions »
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Un seul déploiement à la fois ; le plus récent l'emporte.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v6
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Configurer GitHub Pages
+        id: pages
+        uses: actions/configure-pages@v6
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Tests unitaires (reconnaissance des gestes)
+        run: npm test
+
+      - name: Construire le projet
+        run: npm run build
+        env:
+          # Chemin de base calculé automatiquement à partir du nom du dépôt
+          # (ex. /gesture-galaxy/) ou du domaine personnalisé.
+          BASE_PATH: ${{ steps.pages.outputs.base_path }}/
+          # URL publique complète, utilisée pour l'aperçu LinkedIn (balises Open Graph).
+          VITE_SITE_URL: ${{ steps.pages.outputs.base_url }}/
+
+      - name: Vérifier le contenu du build
+        run: |
+          test -f dist/index.html
+          test -f dist/models/hand_landmarker.task
+          test -f dist/mediapipe/wasm/vision_wasm_internal.wasm
+          ls -la dist dist/assets
+
+      - name: Publier l'artefact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+
+  deploy:
+    name: Déploiement
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Déployer sur GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
