@@ -57,7 +57,7 @@ jobs:
           ls -la dist dist/assets
 
       - name: Publier l'artefact
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
