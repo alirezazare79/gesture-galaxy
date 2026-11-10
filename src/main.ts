@@ -12,6 +12,8 @@ import { GestureController, type GestureState } from './components/GestureContro
 import { HandTracker, toCameraError } from './components/HandTracker.ts';
 import { Interface, type LoadingStep } from './components/Interface.ts';
 import { MouseController } from './components/MouseController.ts';
+import { SoundEngine } from './components/SoundEngine.ts';
+import { TwoHandController } from './components/TwoHandController.ts';
 import { clamp, deadZone, type Landmark } from './utils/gestureUtils.ts';
 import {
   QualityMonitor,
@@ -29,11 +31,29 @@ const TILT_RANGE = 0.3;
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+const SOUND_PREF_KEY = 'gesture-galaxy:sound';
+function readSoundPref(): boolean {
+  try {
+    return localStorage.getItem(SOUND_PREF_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+function saveSoundPref(enabled: boolean): void {
+  try {
+    localStorage.setItem(SOUND_PREF_KEY, enabled ? 'on' : 'off');
+  } catch {
+    /* stockage indisponible : préférence non mémorisée */
+  }
+}
+
 class App {
   private readonly ui: Interface;
   private readonly galaxy: Galaxy;
   private readonly tracker: HandTracker;
   private readonly gestures = new GestureController();
+  private readonly twoHands = new TwoHandController();
+  private readonly sound = new SoundEngine();
   private readonly mouse: MouseController;
   private readonly quality: QualityMonitor;
 
@@ -42,6 +62,8 @@ class App {
   private lastFrame = performance.now();
   private rafId = 0;
   private disposed = false;
+  /** Mode capture (débogage) : l'animation n'avance que sur demande. */
+  private frozen = false;
 
   constructor(ui: Interface) {
     this.ui = ui;
@@ -59,9 +81,10 @@ class App {
     });
 
     // Pincement : impulsion lumineuse (une seule fois par pincement, géré par le contrôleur).
-    this.gestures.onPinch(() => this.galaxy.pulse());
+    this.gestures.onPinch(() => this.firePulse());
 
     this.mouse = new MouseController(ui.sceneContainer, this.galaxy, (action) => {
+      if (action === 'pulse') this.sound.explosion();
       if (this.mode === 'none' && this.ui.state !== 'welcome') return;
       if (this.mode === 'mouse') this.ui.showMouseAction(action);
       this.ui.setMouseExpansionButtons(this.galaxy.getExpansionTarget());
@@ -70,6 +93,8 @@ class App {
     this.bindGlobalEvents();
     this.updateWelcomeLayout(true);
     this.ui.setEffectsButton(true);
+    this.sound.setEnabled(readSoundPref());
+    this.ui.setSoundButton(this.sound.isEnabled);
     this.ui.setFullscreenButton(false, fullscreenSupported());
     this.rafId = requestAnimationFrame(this.loop);
   }
@@ -89,6 +114,7 @@ class App {
   async startGestureMode(): Promise<void> {
     if (this.starting) return;
     this.starting = true;
+    this.sound.start(); // doit suivre directement le clic de l'utilisateur
     const ui = this.ui;
     ui.resetLoadingSteps();
     ui.setState('loading');
@@ -126,8 +152,8 @@ class App {
 
       ui.setState('running');
       this.updateWelcomeLayout();
-      this.galaxy.pulse();
-      ui.notify('Montrez votre main à la caméra ✋', 3500);
+      this.firePulse();
+      ui.notify('Montrez votre main à la caméra ✋ — ou les deux 🙌', 3800);
     } catch (err) {
       const error = toCameraError(err);
       ui.setStep(current, 'error');
@@ -144,8 +170,10 @@ class App {
 
   /** Mode alternatif : souris, tactile et clavier. */
   startMouseMode(): void {
+    this.sound.start();
     this.tracker.stopCamera();
     this.gestures.reset();
+    this.twoHands.reset();
     this.galaxy.setSpinInput(0);
     const fromOverlay = this.ui.state !== 'running';
     this.mode = 'mouse';
@@ -155,7 +183,7 @@ class App {
     this.galaxy.setDolly(1);
     this.ui.setMouseExpansionButtons(this.galaxy.getExpansionTarget());
     if (fromOverlay) {
-      this.galaxy.pulse();
+      this.firePulse();
       this.ui.notify('Mode souris : glissez, faites défiler, cliquez', 3500);
     }
   }
@@ -197,8 +225,23 @@ class App {
   }
 
   pulse(): void {
-    this.galaxy.pulse();
+    this.firePulse();
     this.ui.showMouseAction('pulse');
+  }
+
+  /** Impulsion lumineuse + explosion sonore. */
+  private firePulse(): void {
+    this.galaxy.pulse();
+    this.sound.explosion();
+  }
+
+  toggleSound(): void {
+    const enabled = !this.sound.isEnabled;
+    this.sound.setEnabled(enabled);
+    if (enabled) this.sound.start();
+    saveSoundPref(enabled);
+    this.ui.setSoundButton(enabled);
+    this.ui.notify(enabled ? 'Son activé 🔊' : 'Son coupé', 1600);
   }
 
   toggleExpansion(direction: 1 | -1): void {
@@ -214,8 +257,35 @@ class App {
   // ------------------------------------------------------------------
 
   private wasTracking = false;
+  private wasTwoHands = false;
 
-  /** Traite une observation de la main (réelle ou simulée). */
+  /**
+   * Traite une observation (réelle ou simulée) : 0, 1 ou 2 mains.
+   * Deux mains → zoom et rotation ; une main → les cinq gestes principaux.
+   */
+  processHands(hands: ReadonlyArray<ReadonlyArray<Landmark>>, now: number, aspect: number): GestureState {
+    const two = this.twoHands.update(hands, now, aspect, this.galaxy.getDollyTarget(), this.galaxy.getRollTarget());
+    if (two.active) {
+      if (!this.wasTwoHands) {
+        this.galaxy.setSpinInput(0);
+        this.ui.notify('🙌 Deux mains : écartez pour zoomer, tournez pour orienter', 2600);
+      }
+      this.wasTwoHands = true;
+      this.galaxy.setDolly(two.zoom);
+      this.galaxy.setRoll(two.roll);
+      this.ui.updateTwoHands(two);
+      this.ui.drawHands(hands, 'neutral');
+      return this.gestures.state;
+    }
+    if (this.wasTwoHands) {
+      // Retour à une main : nouvelle référence de position, sans à-coup.
+      this.wasTwoHands = false;
+      this.gestures.resync();
+    }
+    return this.processHand(hands[0] ?? null, now, aspect);
+  }
+
+  /** Traite une observation d'une seule main (réelle ou simulée). */
   processHand(landmarks: ReadonlyArray<Landmark> | null, now: number, aspect: number): GestureState {
     const s = this.gestures.update(landmarks, now, aspect);
     const tracking = s.tracking !== 'none';
@@ -233,7 +303,7 @@ class App {
     }
     this.wasTracking = tracking;
     this.ui.updateGesture(s);
-    this.ui.drawLandmarks(landmarks, s.gesture);
+    this.ui.drawHands(landmarks ? [landmarks] : [], s.gesture);
     return s;
   }
 
@@ -247,15 +317,18 @@ class App {
     const dt = Math.min((now - this.lastFrame) / 1000, 0.1);
     this.lastFrame = now;
 
+    if (this.frozen) return;
+
     if (this.mode === 'gesture') {
       const result = this.tracker.detect(now);
-      if (result) this.processHand(result.landmarks, now, result.aspect);
+      if (result) this.processHands(result.hands, now, result.aspect);
     } else if (this.mode === 'mouse') {
       this.ui.tickMouseMode(now);
     }
 
     this.galaxy.update(dt);
     this.galaxy.render();
+    this.sound.update(this.galaxy.audioState);
     this.quality.sample(dt);
   };
 
@@ -283,6 +356,13 @@ class App {
       if (key === 'r') this.reset();
       else if (key === 'f') void this.toggleFullscreen();
       else if (key === 'e') this.toggleEffects();
+      else if (key === 'm') this.toggleSound();
+    });
+
+    // Coupe le son quand l'onglet est en arrière-plan.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) void this.sound.suspend();
+      else void this.sound.resume();
     });
 
     this.galaxy.canvas.addEventListener('webglcontextlost', (e) => {
@@ -306,8 +386,43 @@ class App {
       quality: () => ({ level: this.quality.level, fps: this.quality.fps }),
       tracker: () => ({ camera: this.tracker.cameraActive, model: this.tracker.modelReady, delegate: this.tracker.delegate }),
       simulateHand: (landmarks: Landmark[] | null, time = performance.now(), aspect = 4 / 3) => {
-        this.processHand(landmarks, time, aspect);
+        this.processHands(landmarks ? [landmarks] : [], time, aspect);
         return { ...this.gestures.state };
+      },
+      simulateHands: (hands: Landmark[][], time = performance.now(), aspect = 4 / 3) => {
+        this.processHands(hands, time, aspect);
+        return { gesture: { ...this.gestures.state }, twoHands: { ...this.twoHands.state } };
+      },
+      sound: () => ({ started: this.sound.started, enabled: this.sound.isEnabled }),
+      /** Capture image par image : fige l'animation, puis la fait avancer pas à pas. */
+      freeze: (on: boolean) => {
+        this.frozen = on;
+      },
+      step: (dt = 1 / 30, frames = 1) => {
+        for (let i = 0; i < frames; i++) this.galaxy.update(dt);
+        this.galaxy.render();
+      },
+      /** Rendu audio hors ligne : mesure le niveau sonore au repos, en contraction et lors d'une explosion. */
+      audioSelfTest: async () => {
+        const rms = async (setup: (e: SoundEngine) => void) => {
+          const ctx = new OfflineAudioContext(1, 44100 * 2, 44100);
+          const e = new SoundEngine();
+          e.attach(ctx, ctx.destination, 0.01);
+          setup(e);
+          const data = (await ctx.startRendering()).getChannelData(0);
+          // Fenêtre 0,1 s → 0,8 s : là où l'explosion est la plus forte.
+          let sum = 0;
+          for (let i = 4410; i < 35280; i++) sum += data[i] * data[i];
+          return Math.sqrt(sum / (35280 - 4410));
+        };
+        return {
+          rest: await rms((e) => e.update({ expansion: 0, spin: 0 })),
+          contraction: await rms((e) => e.update({ expansion: -1, spin: 0 })),
+          explosion: await rms((e) => {
+            e.update({ expansion: 0, spin: 0 });
+            e.explosion();
+          }),
+        };
       },
     };
   }
@@ -318,6 +433,7 @@ class App {
     cancelAnimationFrame(this.rafId);
     this.mouse.dispose();
     this.tracker.dispose();
+    this.sound.dispose();
     this.galaxy.dispose();
   }
 }
@@ -334,6 +450,7 @@ const ui = new Interface({
   onMouseMode: () => app?.startMouseMode(),
   onToggleCamera: () => app?.toggleCamera(),
   onToggleEffects: () => app?.toggleEffects(),
+  onToggleSound: () => app?.toggleSound(),
   onReset: () => app?.reset(),
   onFullscreen: () => void app?.toggleFullscreen(),
   onPulse: () => app?.pulse(),

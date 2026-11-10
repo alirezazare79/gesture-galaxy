@@ -14,7 +14,7 @@ Une galaxie spirale 3D de dizaines de milliers d'étoiles, pilotée en temps ré
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
 ![Licence MIT](https://img.shields.io/badge/licence-MIT-green)
 
-![Capture d'écran de GESTURE GALAXY](docs/screenshot.jpg)
+![Démonstration animée : la galaxie s'étend quand la main s'ouvre, se contracte avec le poing et explose au pincement](docs/demo.gif)
 
 </div>
 
@@ -32,7 +32,9 @@ Pas de souris, pas de clavier, pas d'installation : tout fonctionne dans le navi
 
 - 🌌 **Galaxie spirale 3D** à 4 bras : jusqu'à 28 000 étoiles (adapté automatiquement à l'appareil), nébuleuses, noyau lumineux, fond étoilé et effet de *bloom*.
 - 🎨 **Palette futuriste** en dégradé : violet, bleu électrique, rose et cyan.
-- ✋ **5 gestes reconnus en temps réel** grâce aux 21 points de repère de la main (MediaPipe).
+- ✋ **5 gestes à une main + gestes à deux mains** reconnus en temps réel grâce aux 21 points de repère de chaque main (MediaPipe).
+- 🙌 **Deux mains** : écartez-les pour plonger dans la galaxie, tournez-les comme un volant pour l'orienter.
+- 🔊 **Ambiance sonore réactive**, entièrement synthétisée (Web Audio, aucun fichier audio) : nappe spatiale, grondement à la contraction, scintillement à l'expansion, explosion au pincement.
 - 🎯 **Reconnaissance stable** : lissage *One Euro*, zone morte, hystérésis, confirmation sur plusieurs images, temporisation des impulsions et gestion des pertes de détection.
 - 🖱 **Mode alternatif sans caméra** : souris, tactile et clavier.
 - 🔒 **100 % local** : aucune image ne quitte votre navigateur, aucun serveur nécessaire.
@@ -47,7 +49,9 @@ Pas de souris, pas de clavier, pas d'installation : tout fonctionne dans le navi
 | ✊ **Poing fermé** | Contraction : les étoiles sont aspirées en tourbillon vers le noyau, qui s'embrase. |
 | ↔ **Déplacement gauche / droite** | Rotation de la galaxie ; la vitesse dépend de la vitesse de votre main, avec inertie. |
 | ↕ **Déplacement haut / bas** | Changement d'angle de vue : main haute, vue plongeante ; main basse, contre-plongée. |
-| 🤏 **Pincement pouce / index** | Impulsion lumineuse : explosion radiale, onde de choc et changement temporaire de couleur. **Une seule impulsion par pincement.** |
+| 🤏 **Pincement pouce / index** | Impulsion lumineuse et sonore : explosion radiale, onde de choc et changement temporaire de couleur. **Une seule impulsion par pincement.** |
+| 🙌 **Deux mains : écarter / rapprocher** | Zoom avant / arrière : on plonge au cœur de la galaxie. |
+| 🙌 **Deux mains : tourner comme un volant** | Rotation de la galaxie dans le plan de l'écran. |
 
 ### Mode souris, tactile et clavier
 
@@ -57,13 +61,18 @@ Pas de souris, pas de clavier, pas d'installation : tout fonctionne dans le navi
 | Angle de vue | Glisser verticalement | ↑ ↓ |
 | Expansion / contraction | Molette ou boutons « Expansion » / « Contraction » | + / − |
 | Impulsion | Clic / tap ou bouton « Impulsion » | Espace |
-| Réinitialiser · Plein écran · Effets | Boutons en haut à droite | R · F · E |
+| Zoom | Maj + molette, ou pincement sur pavé tactile | — |
+| Orientation | — | Q / D |
+| Réinitialiser · Plein écran · Effets · Son | Boutons en haut à droite | R · F · E · M |
+
 
 ## Captures d'écran
 
-| Écran d'accueil | Contraction (poing fermé) | Impulsion (pincement) |
+| Expansion (main ouverte) | Contraction (poing fermé) | Impulsion (pincement) |
 | --- | --- | --- |
-| ![Accueil](docs/accueil.jpg) | ![Contraction](docs/contraction.jpg) | ![Impulsion](docs/impulsion.jpg) |
+| ![Expansion](docs/screenshot.jpg) | ![Contraction](docs/contraction.jpg) | ![Impulsion](docs/impulsion.jpg) |
+
+![Écran d'accueil](docs/accueil.jpg)
 
 ## Technologies
 
@@ -71,6 +80,7 @@ Pas de souris, pas de clavier, pas d'installation : tout fonctionne dans le navi
 | --- | --- |
 | [Three.js](https://threejs.org/) | Scène 3D, particules (`BufferGeometry` + `Points`), post-traitement (bloom) |
 | WebGL / GLSL | Shaders personnalisés : toute l'animation des étoiles est calculée sur le GPU |
+| Web Audio API | Ambiance sonore générée en temps réel (oscillateurs, bruit filtré, réverbération) |
 | [MediaPipe Hand Landmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker) | Détection de la main et de ses 21 points de repère (modèle pré-entraîné publié par Google) |
 | TypeScript | Code typé et structuré |
 | Vite | Serveur de développement et build de production |
@@ -156,6 +166,8 @@ gesture-galaxy/
 │   │   ├── Galaxy.ts              # Scène Three.js, particules, bloom, physique des commandes
 │   │   ├── HandTracker.ts         # Webcam + MediaPipe (chargé à la demande)
 │   │   ├── GestureController.ts   # Points de repère → gestes stables et commandes
+│   │   ├── TwoHandController.ts   # Gestes à deux mains : zoom et orientation
+│   │   ├── SoundEngine.ts         # Ambiance sonore synthétisée (Web Audio)
 │   │   ├── MouseController.ts     # Mode souris / tactile / clavier
 │   │   └── Interface.ts           # DOM : écrans, indicateurs, squelette de la main
 │   ├── shaders/galaxyShaders.ts   # Shaders GLSL (animation GPU des étoiles)
@@ -171,12 +183,15 @@ gesture-galaxy/
 Le flux de données est volontairement simple et découplé :
 
 ```
-Webcam → HandTracker (MediaPipe, ~30 analyses/s) → GestureController (lissage, gestes)
-       → main.ts (traduction en commandes) → Galaxy (ressorts amortis → uniforms GPU)
-Souris/clavier → MouseController ───────────────────────────┘
+Webcam → HandTracker (MediaPipe, ~30 analyses/s, jusqu'à 2 mains)
+       ├─ 1 main  → GestureController (lissage, gestes)
+       └─ 2 mains → TwoHandController (zoom, orientation)
+              → main.ts (traduction en commandes) → Galaxy (ressorts amortis → uniforms GPU)
+                                                  → SoundEngine (paramètres audio)
+Souris/clavier → MouseController ──────────────────┘
 ```
 
-`GestureController` et `gestureUtils` n'ont aucune dépendance au DOM ni à Three.js : ils sont testés unitairement avec des mains synthétiques (poing, main ouverte, pincement, index pointé, poing avec le pouce sur l'index…).
+`GestureController`, `TwoHandController` et `gestureUtils` n'ont aucune dépendance au DOM ni à Three.js : ils sont testés unitairement avec des mains synthétiques (poing, main ouverte, pincement, index pointé, poing avec le pouce sur l'index…).
 
 ## Tests
 
@@ -207,10 +222,8 @@ BASE_PATH=/gesture-galaxy/ npm run build && BASE_PATH=/gesture-galaxy/ npm run t
 
 ## Améliorations futures
 
-- Gestes à deux mains (zoom, rotation 3D libre).
 - Mode « création » : dessiner de nouvelles étoiles du bout de l'index.
 - Plusieurs univers (nébuleuse, trou noir, amas globulaire) et transitions entre eux.
-- Ambiance sonore réactive aux gestes (Web Audio).
 - Enregistrement d'une courte vidéo de la session directement depuis l'application.
 - Traitement de la vidéo dans un Web Worker pour libérer encore plus le fil principal.
 - Calibration personnalisée des seuils de geste.

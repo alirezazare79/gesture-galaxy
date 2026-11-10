@@ -276,9 +276,21 @@ button {
 .btn[aria-pressed='false']#btn-effects {
   color: var(--ink-mute);
 }
-.btn[aria-pressed='true']:not(#btn-effects) {
+.btn[aria-pressed='true']:not(#btn-effects):not(#btn-sound) {
   border-color: rgba(34, 227, 255, 0.6);
   background: rgba(34, 227, 255, 0.16);
+}
+#btn-sound .mute {
+  display: none;
+}
+#btn-sound.is-muted {
+  color: var(--ink-mute);
+}
+#btn-sound.is-muted .mute {
+  display: inline;
+}
+#btn-sound.is-muted .wave {
+  display: none;
 }
 .btn--small {
   height: 36px;
@@ -484,6 +496,18 @@ button {
   inset: -4px;
   border-radius: 50%;
   border: 1.5px solid var(--ok);
+  animation: ping 1.6s var(--ease) infinite;
+}
+.dot[data-status='two'] {
+  background: var(--cyan);
+  box-shadow: 0 0 12px var(--cyan);
+}
+.dot[data-status='two']::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1.5px solid var(--cyan);
   animation: ping 1.6s var(--ease) infinite;
 }
 .dot[data-status='lost'] {
@@ -968,9 +992,15 @@ button {
   }
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1360px) {
+  /* Libellés masqués visuellement mais conservés pour les lecteurs d'écran. */
   .toolbar .btn__label {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .toolbar .btn {
     width: 42px;
@@ -982,7 +1012,10 @@ button {
     padding: 0 14px;
   }
   .toolbar #btn-camera .btn__label {
-    display: inline;
+    position: static;
+    width: auto;
+    height: auto;
+    clip-path: none;
   }
 }
 
@@ -1027,7 +1060,11 @@ button {
     justify-content: flex-start;
   }
   .toolbar #btn-camera .btn__label {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
   .toolbar #btn-camera {
     width: 42px;

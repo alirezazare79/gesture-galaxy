@@ -4,13 +4,14 @@
  *  - Glisser horizontalement : rotation (avec inertie)
  *  - Glisser verticalement   : angle de vue
  *  - Molette                 : expansion / contraction
+ *  - Maj + molette (ou pincement sur pavé tactile) : zoom
  *  - Clic (ou tap)           : impulsion lumineuse
- *  - Clavier : ← → rotation · ↑ ↓ angle · + / − expansion · Espace impulsion
+ *  - Clavier : ← → rotation · ↑ ↓ angle · + / − expansion · Q / D orientation · Espace impulsion
  */
 import type { Galaxy } from './Galaxy.ts';
 import { clamp } from '../utils/gestureUtils.ts';
 
-export type MouseAction = 'rotate' | 'tilt' | 'expand' | 'contract' | 'neutral' | 'pulse';
+export type MouseAction = 'rotate' | 'tilt' | 'expand' | 'contract' | 'neutral' | 'pulse' | 'zoom' | 'roll';
 
 const DRAG_THRESHOLD = 6; // px avant de considérer un glisser (sinon c'est un clic)
 
@@ -100,6 +101,14 @@ export class MouseController {
   private onWheel = (e: WheelEvent) => {
     e.preventDefault();
     const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+    if (e.shiftKey || e.ctrlKey) {
+      // Zoom (certains navigateurs convertissent Maj + molette en défilement horizontal).
+      const delta = (e.deltaY || e.deltaX) * unit;
+      const factor = Math.exp(clamp(delta / 600, -0.3, 0.3));
+      this.galaxy.setDolly(clamp(this.galaxy.getDollyTarget() * factor, 0.45, 1.9));
+      this.onAction('zoom');
+      return;
+    }
     // Un cran de molette (≈100 px) = un quart de la course d'expansion.
     this.stepExpansion(clamp((-e.deltaY * unit) / 400, -0.34, 0.34));
   };
@@ -132,6 +141,16 @@ export class MouseController {
       case '-':
       case '_':
         this.stepExpansion(-0.5);
+        break;
+      case 'q':
+      case 'Q':
+        this.galaxy.setRoll(this.galaxy.getRollTarget() + 0.2);
+        this.onAction('roll');
+        break;
+      case 'd':
+      case 'D':
+        this.galaxy.setRoll(this.galaxy.getRollTarget() - 0.2);
+        this.onAction('roll');
         break;
       case ' ':
         if (interactive) return; // laisse l'espace activer les boutons

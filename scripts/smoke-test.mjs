@@ -200,6 +200,64 @@ try {
   }
 
   // -------------------------------------------------------------------------
+  console.log('\n▶ Deux mains, son et zoom');
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const { page, errors } = await open(ctx);
+    await page.getByRole('button', { name: 'Continuer sans caméra (mode souris)' }).click();
+    await wait(300);
+    const snd = await gg(page, 'sound()');
+    check(snd.started && snd.enabled, 'son démarré après le clic');
+
+    const pair = (gap, tilt = 0) => [
+      makeHand(OPEN_HAND, { cx: 0.5 - gap / 2, cy: 0.7 - tilt / 2, size: 0.12 }),
+      makeHand(OPEN_HAND, { cx: 0.5 + gap / 2, cy: 0.7 + tilt / 2, size: 0.12 }),
+    ];
+    let t = 200000;
+    const feed2 = async (fn, n) => {
+      let r;
+      for (let i = 0; i < n; i++, t += 33) r = await page.evaluate(([h, tt]) => window.__GG__.simulateHands(h, tt), [fn(i), t]);
+      return r;
+    };
+    const d0 = (await gg(page, 'galaxy()')).dolly;
+    let r = await feed2(() => pair(0.3), 5);
+    check(r.twoHands.active, 'deux mains détectées → mode deux mains');
+    check((await page.locator('#hand-status').textContent()) === 'Deux mains détectées', 'indicateur « Deux mains détectées »');
+    await feed2((i) => pair(0.3 + Math.min(i, 12) * 0.025), 30);
+    const g1 = await gg(page, 'galaxy()');
+    check(g1.dolly < d0 * 0.7, `écarter les mains → zoom avant (${d0.toFixed(2)} → ${g1.dolly.toFixed(2)})`);
+    await feed2(() => pair(0.6, -0.25), 30);
+    const g2 = await gg(page, 'galaxy()');
+    check(g2.roll < -0.2, `tourner les mains → orientation (${g2.roll.toFixed(2)} rad)`);
+    await page.evaluate(() => window.__GG__.step(1 / 30, 60));
+    await page.screenshot({ path: `${SHOTS}/08-deux-mains.png` });
+    r = await feed2(() => [makeHand(OPEN_HAND)], 25);
+    check(!r.twoHands.active && r.gesture.gesture === 'open', 'retour à une main → gestes classiques');
+
+    const audio = await page.evaluate(() => window.__GG__.audioSelfTest());
+    check(audio.rest > 0.001, `nappe sonore audible au repos (RMS ${audio.rest.toFixed(4)})`);
+    check(audio.contraction > audio.rest * 1.3, `contraction → grondement plus fort (RMS ${audio.contraction.toFixed(4)})`);
+    check(audio.explosion > audio.rest * 2, `pincement → explosion sonore (RMS ${audio.explosion.toFixed(4)})`);
+
+    await page.getByRole('button', { name: 'Son : activé' }).click();
+    check((await gg(page, 'sound()')).enabled === false, 'bouton son → coupé');
+    await page.keyboard.press('m');
+    check((await gg(page, 'sound()')).enabled === true, 'touche M → son réactivé');
+
+    await page.getByRole('button', { name: 'Réinitialiser la galaxie' }).click();
+    await page.mouse.move(640, 400);
+    const z0 = (await gg(page, 'galaxy()')).dolly;
+    await page.keyboard.down('Shift');
+    for (let i = 0; i < 3; i++) await page.mouse.wheel(0, -100);
+    await page.keyboard.up('Shift');
+    check((await gg(page, 'galaxy()')).dolly < z0, 'Maj + molette → zoom avant');
+    await page.keyboard.press('q');
+    check((await gg(page, 'galaxy()')).roll > 0, 'touche Q → orientation');
+    check(errors.length === 0, `aucune erreur console ${errors.join(' | ')}`);
+    await ctx.close();
+  }
+
+  // -------------------------------------------------------------------------
   console.log('\n▶ Caméra simulée + MediaPipe');
   {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, permissions: ['camera'] });

@@ -187,6 +187,18 @@ export class GestureController {
     return s;
   }
 
+  /**
+   * À appeler après une interruption (geste à deux mains) : la prochaine position
+   * sert de nouvelle référence, sans pic de vitesse.
+   */
+  resync(): void {
+    this.filterX.reset();
+    this.filterY.reset();
+    this.settleFrames = 3;
+    this.state.velocityX = 0;
+    this.state.velocityY = 0;
+  }
+
   /** Remet le contrôleur dans son état initial (aucune main). */
   reset(): void {
     this.resetTracking();

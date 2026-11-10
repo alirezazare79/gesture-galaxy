@@ -6,6 +6,7 @@
 import type { GestureState, MotionDirection } from './GestureController.ts';
 import type { CameraErrorCode } from './HandTracker.ts';
 import type { MouseAction } from './MouseController.ts';
+import type { TwoHandState } from './TwoHandController.ts';
 import type { GestureKind, Landmark } from '../utils/gestureUtils.ts';
 
 export type AppState = 'welcome' | 'loading' | 'error' | 'running';
@@ -18,6 +19,7 @@ export interface InterfaceHandlers {
   onRetry(): void;
   onToggleCamera(): void;
   onToggleEffects(): void;
+  onToggleSound(): void;
   onReset(): void;
   onFullscreen(): void;
   onPulse(): void;
@@ -53,6 +55,8 @@ const MOUSE_TEXT: Record<MouseAction, GestureDisplay & { guide: string | null }>
   contract: { icon: '✊', label: 'Contraction', hint: 'Molette vers le bas / −', guide: 'fist' },
   neutral: { icon: '✦', label: 'Repos', hint: 'Taille normale', guide: null },
   pulse: { icon: '🤏', label: 'Impulsion', hint: 'Explosion lumineuse !', guide: 'pinch' },
+  zoom: { icon: '🔍', label: 'Zoom', hint: 'Maj + molette', guide: 'two-hands' },
+  roll: { icon: '🙌', label: 'Orientation', hint: 'Touches Q / D', guide: 'two-hands' },
 };
 
 const ERROR_TEXT: Record<CameraErrorCode | 'webgl', { title: string; message: string; help: string }> = {
@@ -140,6 +144,7 @@ export class Interface {
   private readonly toast = $<HTMLDivElement>('toast');
   private readonly btnCamera = $<HTMLButtonElement>('btn-camera');
   private readonly btnEffects = $<HTMLButtonElement>('btn-effects');
+  private readonly btnSound = $<HTMLButtonElement>('btn-sound');
   private readonly btnFullscreen = $<HTMLButtonElement>('btn-fullscreen');
   private readonly btnExpand = $<HTMLButtonElement>('btn-expand');
   private readonly btnContract = $<HTMLButtonElement>('btn-contract');
@@ -156,6 +161,7 @@ export class Interface {
     $('btn-retry').addEventListener('click', handlers.onRetry);
     this.btnCamera.addEventListener('click', handlers.onToggleCamera);
     this.btnEffects.addEventListener('click', handlers.onToggleEffects);
+    this.btnSound.addEventListener('click', handlers.onToggleSound);
     $('btn-reset').addEventListener('click', handlers.onReset);
     this.btnFullscreen.addEventListener('click', handlers.onFullscreen);
     $('btn-pulse').addEventListener('click', handlers.onPulse);
@@ -236,6 +242,13 @@ export class Interface {
     if (label) label.textContent = enabled ? 'Effets : activés' : 'Effets : désactivés';
   }
 
+  setSoundButton(enabled: boolean): void {
+    this.btnSound.setAttribute('aria-pressed', String(enabled));
+    const label = this.btnSound.querySelector('.btn__label');
+    if (label) label.textContent = enabled ? 'Son : activé' : 'Son : coupé';
+    this.btnSound.classList.toggle('is-muted', !enabled);
+  }
+
   setFullscreenButton(active: boolean, supported: boolean): void {
     this.btnFullscreen.hidden = !supported;
     const label = this.btnFullscreen.querySelector('.btn__label');
@@ -258,13 +271,14 @@ export class Interface {
   // Indicateurs
   // ------------------------------------------------------------------
 
-  setHandStatus(status: 'off' | 'searching' | 'active' | 'lost' | 'mouse'): void {
+  setHandStatus(status: 'off' | 'searching' | 'active' | 'lost' | 'mouse' | 'two'): void {
     if (this.handDot.dataset.status === status) return;
     this.handDot.dataset.status = status;
     this.handStatus.textContent = {
       off: 'Caméra inactive',
       searching: 'Recherche de la main…',
       active: 'Main détectée',
+      two: 'Deux mains détectées',
       lost: 'Main perdue, reprise…',
       mouse: 'Mode souris actif',
     }[status];
@@ -283,6 +297,16 @@ export class Interface {
     else if (s.gesture === 'open' || s.gesture === 'fist') guide = s.gesture;
     this.highlightGuide(guide);
     this.updateReticle(s);
+  }
+
+  /** Indicateurs pendant le geste à deux mains. */
+  updateTwoHands(t: TwoHandState): void {
+    this.setHandStatus('two');
+    const zoomPct = Math.round((1 / t.zoom) * 100);
+    const deg = Math.round((-t.roll * 180) / Math.PI);
+    this.showChip({ icon: '🙌', label: 'Deux mains', hint: `Zoom ${zoomPct} % · rotation ${deg}°` }, 'two');
+    this.highlightGuide('two-hands');
+    this.reticle.classList.remove('is-visible', 'is-lost');
   }
 
   /** Retour visuel pour les actions souris / clavier. */
@@ -343,7 +367,7 @@ export class Interface {
   // Squelette de la main sur l'aperçu webcam
   // ------------------------------------------------------------------
 
-  drawLandmarks(landmarks: ReadonlyArray<Landmark> | null, gesture: GestureKind): void {
+  drawHands(hands: ReadonlyArray<ReadonlyArray<Landmark>>, gesture: GestureKind): void {
     const ctx = this.overlayCtx;
     if (!ctx) return;
     const c = this.overlay;
@@ -355,7 +379,7 @@ export class Interface {
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    if (!landmarks) return;
+    if (hands.length === 0) return;
 
     // Correspondance avec object-fit: cover de la vidéo.
     const vw = this.video.videoWidth || 640, vh = this.video.videoHeight || 480;
@@ -370,23 +394,25 @@ export class Interface {
     ctx.strokeStyle = color;
     ctx.shadowColor = color;
     ctx.shadowBlur = 8;
-    ctx.beginPath();
-    for (const [a, b] of HAND_CONNECTIONS) {
-      ctx.moveTo(px(landmarks[a]), py(landmarks[a]));
-      ctx.lineTo(px(landmarks[b]), py(landmarks[b]));
-    }
-    ctx.stroke();
-    ctx.fillStyle = '#ffffff';
-    for (let i = 0; i < landmarks.length; i++) {
-      const tip = i === 4 || i === 8;
+    for (const landmarks of hands) {
       ctx.beginPath();
-      ctx.arc(px(landmarks[i]), py(landmarks[i]), tip ? 3.6 : 2.2, 0, Math.PI * 2);
-      ctx.fill();
+      for (const [a, b] of HAND_CONNECTIONS) {
+        ctx.moveTo(px(landmarks[a]), py(landmarks[a]));
+        ctx.lineTo(px(landmarks[b]), py(landmarks[b]));
+      }
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      for (let i = 0; i < landmarks.length; i++) {
+        const tip = i === 4 || i === 8;
+        ctx.beginPath();
+        ctx.arc(px(landmarks[i]), py(landmarks[i]), tip ? 3.6 : 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
     ctx.shadowBlur = 0;
   }
 
   clearLandmarks(): void {
-    this.drawLandmarks(null, 'none');
+    this.drawHands([], 'none');
   }
 }

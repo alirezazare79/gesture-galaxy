@@ -52,7 +52,8 @@ export function toCameraError(err: unknown): CameraError {
 }
 
 export interface DetectionResult {
-  landmarks: Landmark[] | null;
+  /** Mains détectées (0, 1 ou 2), 21 points chacune. */
+  hands: Landmark[][];
   /** Rapport largeur/hauteur de la vidéo. */
   aspect: number;
   timestamp: number;
@@ -142,7 +143,7 @@ export class HandTracker {
           this.landmarker = await HandLandmarkerClass.createFromOptions(fileset, {
             baseOptions: { modelAssetPath, delegate },
             runningMode: 'VIDEO',
-            numHands: 1,
+            numHands: 2,
             minHandDetectionConfidence: 0.6,
             minHandPresenceConfidence: 0.55,
             minTrackingConfidence: 0.5,
@@ -179,9 +180,8 @@ export class HandTracker {
       console.warn('[HandTracker] Analyse impossible pour cette image :', err);
       return null;
     }
-    const hand = result.landmarks?.[0];
     return {
-      landmarks: hand && hand.length === 21 ? hand : null,
+      hands: (result.landmarks ?? []).filter((h) => h.length === 21),
       aspect: v.videoWidth / Math.max(v.videoHeight, 1),
       timestamp: now,
     };

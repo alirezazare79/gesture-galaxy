@@ -142,6 +142,8 @@ export class Galaxy {
   private viewOffset = 0;
   private viewOffsetTarget = 0;
   private dollyTarget = 1.35;
+  private roll = 0;
+  private rollTarget = 0;
 
   constructor(container: HTMLElement, options: GalaxyOptions) {
     this.particleCount = options.particleCount;
@@ -251,6 +253,8 @@ export class Galaxy {
     this.rotation = ((this.rotation % twoPi) + twoPi) % twoPi;
     if (this.rotation > Math.PI) this.rotation -= twoPi;
     this.resetRotation = true;
+    this.rollTarget = 0;
+    this.dollyTarget = 1;
     this.uniforms.uColorShift.value = 0;
     this.pulseAge = 10;
     this.playIntro();
@@ -261,6 +265,24 @@ export class Galaxy {
   /** Rejoue l'animation d'apparition. */
   playIntro(): void {
     this.introTime = 0;
+  }
+
+  /** Rotation de la vue dans le plan de l'écran (radians, sens trigonométrique). */
+  setRoll(v: number): void {
+    this.rollTarget = v;
+  }
+
+  getRollTarget(): number {
+    return this.rollTarget;
+  }
+
+  getDollyTarget(): number {
+    return this.dollyTarget;
+  }
+
+  /** Grandeurs utiles à l'ambiance sonore. */
+  get audioState() {
+    return { expansion: this.expansion, spin: this.spinVelocity + AUTO_SPIN, pulseAge: this.pulseAge };
   }
 
   /** Travelling de caméra animé (1 = normal, >1 = plus loin). */
@@ -298,6 +320,8 @@ export class Galaxy {
   get debugState() {
     return {
       rotation: this.rotation,
+      roll: this.rollTarget,
+      dolly: this.dollyTarget,
       spinVelocity: this.spinVelocity,
       tilt: this.tilt,
       tiltTarget: this.tiltTarget,
@@ -374,6 +398,9 @@ export class Galaxy {
       Math.cos(this.tilt) * dist,
     );
     this.camera.lookAt(0, 0, 0);
+    // Roulis : rotation autour de l'axe de visée (gestes à deux mains).
+    this.roll = damp(this.roll, this.rollTarget, 5, step);
+    if (this.roll !== 0) this.camera.rotateZ(-this.roll);
     this.viewOffset = damp(this.viewOffset, this.viewOffsetTarget, 2.2, step);
     if (Math.abs(this.viewOffset) > 0.0005) {
       this.camera.setViewOffset(this.width, this.height, -this.viewOffset * this.width, 0, this.width, this.height);

@@ -46,6 +46,10 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3zM19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z" /></svg>
             <span class="btn__label">Effets : activés</span>
           </button>
+          <button id="btn-sound" class="btn" type="button" aria-pressed="true" title="Activer ou couper le son (touche M)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path class="wave" d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13" /><path class="mute" d="M16 9l5 6M21 9l-5 6" /><path d="M11 5L6 9H3v6h3l5 4V5z" /></svg>
+            <span class="btn__label">Son : activé</span>
+          </button>
           <button id="btn-reset" class="btn" type="button" title="Réinitialiser la galaxie (touche R)">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v6h6M20 20v-6h-6M5.6 15A8 8 0 0018.4 17M18.4 9A8 8 0 005.6 7" /></svg>
             <span class="btn__label">Réinitialiser la galaxie</span>
@@ -68,6 +72,7 @@
           <li data-gesture="horizontal"><span class="guide__icon">↔</span><span><strong>Gauche / droite</strong><em>Rotation</em></span></li>
           <li data-gesture="vertical"><span class="guide__icon">↕</span><span><strong>Haut / bas</strong><em>Angle de vue</em></span></li>
           <li data-gesture="pinch"><span class="guide__icon">🤏</span><span><strong>Pincement</strong><em>Impulsion</em></span></li>
+          <li data-gesture="two-hands"><span class="guide__icon">🙌</span><span><strong>Deux mains</strong><em>Zoom · orientation</em></span></li>
         </ul>
       </aside>
 
@@ -100,7 +105,7 @@
       <!-- Commandes du mode souris -->
       <div class="mouse-bar hud" id="mouse-bar" aria-label="Commandes du mode souris">
         <p class="mouse-bar__hint">
-          Glissez pour tourner et incliner · Molette pour l'expansion · Clic pour une impulsion
+          Glissez pour tourner et incliner · Molette : expansion · Maj + molette : zoom · Q / D : orientation · Clic : impulsion
         </p>
         <div class="mouse-bar__buttons">
           <button class="btn btn--small" id="btn-contract" type="button" aria-pressed="false">✊ Contraction</button>
@@ -128,6 +133,7 @@
             <li><span>↔</span>Rotation</li>
             <li><span>↕</span>Angle</li>
             <li><span>🤏</span>Impulsion</li>
+            <li><span>🙌</span>Zoom</li>
           </ul>
           <p class="privacy-note">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11V8a6 6 0 1112 0v3M5 11h14v10H5z" /></svg>
