@@ -65,8 +65,6 @@ Pas de souris, pas de clavier, pas d'installation : tout fonctionne dans le navi
 | --- | --- | --- |
 | ![Accueil](docs/accueil.jpg) | ![Contraction](docs/contraction.jpg) | ![Impulsion](docs/impulsion.jpg) |
 
-> Ces captures proviennent du rendu réel de l'application (mode souris). Remplacez-les par vos propres captures en mode caméra si vous le souhaitez.
-
 ## Technologies
 
 | Technologie | Rôle |
